@@ -3,6 +3,7 @@
 const { error } = require('console');
 const fs = require('fs-extra');
 const unzipper = require('unzipper');
+const archiver = require('archiver');
 
 const arguments = process.argv;
 console.log("First custom argument:", arguments[2]);
@@ -18,12 +19,17 @@ switch(command){
         HandlerClone(link);
         break;
     }
-    case 'pull':{
-
+    case 'commit':{
+        const message = arguments[3];
+        HandlerCommit(message);
         break;
     }
     case 'push':{
         HandlerPush();
+        break;
+    }
+    case 'pull':{
+
         break;
     }
 };
@@ -31,14 +37,20 @@ switch(command){
 function HandlerInit(){
     let folderName1 = '.custard';
     let folderName2 = '.custard/config.json';
+    let folderName3 = '.custard/logs.json';
+
     if(!fs.existsSync(folderName1)){
         fs.mkdirSync(folderName1);
+        fs.mkdirSync(`${folderName1}/commits`);
     }
     if(!fs.existsSync(folderName2)){
         fs.writeFileSync(folderName2, JSON.stringify({
             "remoteLink": "",
             "projectName": "",
         }));
+    }
+    if(!fs.existsSync(folderName3)){
+        fs.writeFileSync(folderName3, JSON.stringify([]));
     }
 }
 
@@ -94,9 +106,70 @@ function AddRemote(link,ProjectName){
     fs.writeFileSync('.custard/config.json', JSON.stringify(config));
 }
 
+async function HandlerCommit(message){
+    const config = JSON.parse(fs.readFileSync('.custard/config.json'));
+    const logs = JSON.parse(fs.readFileSync('.custard/logs.json'));
+    let idx;
+    if(logs.length === 0){
+        idx = 1;
+    }else{
+        idx = logs[logs.length-1].commitId + 1;
+    }
+    await zipFolder(config.projectName,`.custard/commits/commit-${idx}-${config.projectName}.zip`);
+    logs.push({
+        commitId: idx,
+        projectName: config.projectName,
+        commitMessage: message,
+        zipFolderLoc: `commits/commit-${idx}-${config.projectName}.zip`,
+        timestamp: new Date().toISOString()
+    });
+    fs.writeFileSync('.custard/logs.json', JSON.stringify(logs));
+}
+
+async function zipFolder(sourceDir, outZipPath) {
+    return new Promise((resolve, reject) => {
+        const output = fs.createWriteStream(outZipPath);
+        const archive = archiver('zip', { zlib: { level: 9 } });
+    
+        output.on('close', () => {
+            console.log(`✅ Zipped successfully: ${outZipPath} (${archive.pointer()} bytes)`);
+            resolve();
+        });
+    
+        archive.on('error', err => reject(err));
+    
+        archive.pipe(output);
+    
+        archive.glob('**/*', {
+            cwd: sourceDir,
+            dot: true,
+            ignore: getCustardIgnorePatterns(sourceDir)
+        });
+    
+        archive.finalize();
+    });
+  }
+
+function getCustardIgnorePatterns(sourceDir) {
+    const defaultIgnores = ['node_modules/**'];
+    const ignoreFile = `${sourceDir}/.custardignore`;
+  
+    if (!fs.existsSync(ignoreFile)) return defaultIgnores;
+  
+    const content = fs.readFileSync(ignoreFile, 'utf-8');
+    const customIgnores = content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'));
+  
+    return [...defaultIgnores, ...customIgnores];
+}
+
 async function HandlerPush(){
     const config = JSON.parse(fs.readFileSync('.custard/config.json'));
+    const logs = JSON.parse(fs.readFileSync('.custard/logs.json'));
     const link = config.remoteLink;
-    const ProjectName = "/" + config.projectName;
+    const ProjectName = logs[logs.length-1].zipFolderLoc;
+    // Logic to Send the Zip folder to Code Sphere
 }
   
