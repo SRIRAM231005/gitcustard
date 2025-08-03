@@ -44,6 +44,7 @@ What it does:
 - Updates:
   - `logs.json` → appends a new commit entry with file-to-blob mapping
   - structure of `logs.json` ->
+    ```
     {
       "commitId": 2,
       "timestamp": "2025-08-03T18:40:00Z",
@@ -53,6 +54,7 @@ What it does:
         "src/utils.js": "e4f5g6..."
       }
     }
+    ```
 
 ---
 
